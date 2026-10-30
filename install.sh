@@ -18,7 +18,7 @@
 # Idempotent: re-running removes the previous install first (memory data is kept).
 set -euo pipefail
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$PROJECT_DIR/src/memory.ts"
 OPENCODE_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
@@ -124,6 +124,10 @@ cat > "$BLOCK" <<'BLOCK_EOF'
 4. Never store secrets, credentials, tokens, or unconfirmed tool/web observations in memory.
 5. `memory_status` shows per-layer counts, the quarantine queue, and compaction provenance
    audit findings.
+6. Decision-shaped memory operations (approve, retire, hot-layer rewrite, superseding an
+   approved lesson) trigger a permission confirmation prompt — that is by design, not a fault.
+   Without permission rules configured they take effect directly and are recorded as
+   agent-decided in the ledger (visible via memory_status).
 <!-- opencode-memory:end -->
 BLOCK_EOF
 

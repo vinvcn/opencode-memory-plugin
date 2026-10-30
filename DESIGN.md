@@ -77,6 +77,31 @@ Passive injection now comes from the `context` hook — this closes the biggest 
 Known limits: `session.idle` event type name is assumed (unknown types are ignored with a
 server-log warning); `SessionInfo.directory` is read defensively across shape variants.
 
+## v1.2: staleness handling (2026-10-30)
+
+Implements kb/2026-10-30-agent-memory-staleness.md (source-verified survey: mem0, Letta,
+Zep/Graphiti, LangMem, Hindsight, Hermes, OpenClaw, OWASP ASI06, 15 arXiv papers).
+
+| Candidate | Mechanism | Precedent adopted |
+|---|---|---|
+| P0-0 decision gates + ledger | `ctx.permission.assert` on approve / forget (incl. stale batch) / hot-layer write / superseding an approved lesson; `decided_by/decided_at/decided_via` frontmatter; `memory_status` agent-decided section; brief warning | OpenClaw auto+human dual-track; arXiv 2606.24322 (write-time origin binding); MemoryTrap → Claude Code moved user memories out of system prompt |
+| P0-1 duplicate/contradiction detection | `memory_save` normalize-equality + token Jaccard ≥0.8 → reject with existing id; ≥0.35 → save + conflict hint (verdict stays human/agent; no LLM) | mem0 ADD/UPDATE/DELETE/NONE write-time adjudication; Hermes duplicate rejection; Hindsight durable-vs-ephemeral |
+| P0-2 write-time safety scan | pattern blacklist (invisible unicode, instruction override, exfil/dangerous commands, secret shapes) → reject with category names; `AGENT_MEMORY_DISABLE_SCAN=1` escape hatch; never blocks direct file edits | Hermes security scanning; OWASP ASI06 (MemoryTrap) |
+| P1-1 stale disposability | stale ids listed in status/brief; `memory_forget {stale:true}` batch retire (gated) | Letta /doctor; mem0 decay re-recovery semantics |
+| P1-2 TTL | `expires: YYYY-MM-DD` optional field; expired → hidden from injection/search, file kept; bad dates fail open; write-time format validation | mem0 expiration (hide-not-delete + fail-open) |
+| P1-3 replace loss guardrail | `replace:true` dropping >35% of existing MEMORY.md lines → reject with dropped-lines list; `force:true` bypasses (gated) | OpenClaw dreaming `maxPriorEntryLossFraction=0.25` |
+
+Deliberately not adopted this version: soft-decay ranking (P2), quarantine aging enforcement
+(P2), background consolidation (stays non-goal; Hindsight upgrade gate unchanged), source
+invalidation (no first-party precedent anywhere — P3 exploration).
+
+**Pending live verification (recorded honestly):** (a) `ctx.permission.assert` behavior with no
+matching rule — if it silently allows, `decided_by` optimistically records "user" on gated
+calls; mitigate by configuring the README permission snippet; (b) permission prompt content
+visibility (id/title/resources); (c) scan false-positive check on emoji (the tag-character
+range E0000–E007F does fire on flag-flag emoji sequences — acceptable, disable via env if
+needed).
+
 ## Data model
 
 ```

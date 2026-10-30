@@ -52,12 +52,41 @@ In any opencode session:
 - `memory_approve` — approve quarantine entries after the user confirms
 - `memory_forget` — retire a lesson (superseded, chain kept)
 - `memory_search` — keyword search across lessons
-- `memory_status` — counts, quarantine queue, compaction audit findings
+- `memory_status` — counts, quarantine queue, stale list, agent-decided ledger, compaction audit findings
 
 Self-evolution loop: raw session activity is logged → the agent distills durable
 lessons before ending a session → entries wait in quarantine → you approve →
 approved lessons are injected into future sessions (with provenance labels) →
 hits/decay statistics retire what stops being useful.
+
+## Permissions (v1.2)
+
+Decision-shaped operations route through OpenCode's permission system. To always confirm
+approve/retire interactively, add to `opencode.json`:
+
+```jsonc
+{ "permission": { "memory_approve": "ask", "memory_forget": "ask" } }
+```
+
+Without rules these operations take effect directly and are recorded as `decided_by: agent`
+in the ledger (visible via `memory_status`). Hot-layer writes (`target: "memory"`),
+superseding an approved lesson, and `force: true` also prompt when rules exist.
+
+## Staleness handling (v1.2)
+
+- `expires: YYYY-MM-DD` on save — expired entries vanish from injection and search, files kept
+  (mem0-style hide-not-delete; bad dates fail open)
+- stale entries (30d unhit, <3 hits) stay out of injection but are listed in `memory_status`
+  and the recall brief; `memory_forget { stale: true }` retires them in one prompt-gated call
+- write-time safety scan blocks injection patterns, secret shapes and invisible unicode
+  (disable with `AGENT_MEMORY_DISABLE_SCAN=1`; the scan never blocks direct file edits)
+- near-duplicate writes are rejected with the existing entry id; possible conflicts surface as
+  hints with `supersedes` guidance
+- MEMORY.md `replace` refuses to drop >35% of existing lines unless `force: true`
+  (OpenClaw-style loss guardrail)
+
+Upgrading: `./install.sh` overwrites code only — the data root is never touched, and v1.1.0
+data files read as-is (new frontmatter fields are optional with fail-open defaults).
 
 ## Layout
 
