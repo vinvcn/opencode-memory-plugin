@@ -360,14 +360,25 @@ function markDecision(l: Lesson, by: "user" | "agent", via: string) {
 /** Decision-shaped calls route through the OpenCode permission system: the
  * service prompts the user when a rule resolves to "ask" (configure
  * memory_approve/memory_forget = "ask" in opencode.json). Deny throws. */
-async function assertGate(ctx: any, tctx: any, action: string, resources: string[]) {
-  await ctx.permission.assert({
+/** Decision-shaped calls route through the OpenCode permission system when the
+ * runtime provides it: the service prompts the user when a rule resolves to
+ * "ask" (configure memory.approve / memory.forget / memory.hot-write /
+ * memory.supersede-approved ask rules in opencode.json permissions). Deny throws.
+ * OpenCode v2.0.21 does NOT expose ctx.permission yet (docs describe it, binary
+ * lacks it) — capability-detected here: without it, the decision falls back to
+ * the in-conversation confirmation contract and the ledger records
+ * decided_via: "conversation". Returns "prompted" | "unavailable". */
+async function assertGate(ctx: any, tctx: any, action: string, resources: string[]): Promise<"prompted" | "unavailable"> {
+  const assert = ctx?.permission?.assert
+  if (typeof assert !== "function") return "unavailable"
+  await assert.call(ctx.permission, {
     sessionID: tctx?.sessionID,
     agent: tctx?.agent,
     source: { type: "tool", messageID: tctx?.messageID, id: tctx?.id },
     action,
     resources,
   })
+  return "prompted"
 }
 
 function tokenize(text: string): Set<string> {
@@ -922,8 +933,8 @@ export default Plugin.define({
                 if (l.id === lesson.supersedes && l.status !== "superseded") {
                   // v1.2 P0-0: superseding an APPROVED entry revokes human-approved memory -> gate
                   if (l.status === "approved") {
-                    await assertGate(ctx, tctx, "memory.supersede-approved", [l.id])
-                    markDecision(l, "user", "permission-gate")
+                    const gate = await assertGate(ctx, tctx, "memory.supersede-approved", [l.id])
+                    markDecision(l, "user", gate === "prompted" ? "permission-gate" : "conversation")
                   }
                   l.status = "superseded"
                   l.superseded_reason = `superseded by ${lesson.id}`
@@ -958,7 +969,8 @@ export default Plugin.define({
           execute: async (input: any, tctx: any) => {
             const dir = await dirFor(tctx?.sessionID)
             // v1.2 P0-0: approval is a human decision — always gated
-            await assertGate(ctx, tctx, "memory.approve", input?.id ? [String(input.id)] : ["all-quarantine"])
+            const gate = await assertGate(ctx, tctx, "memory.approve", input?.id ? [String(input.id)] : ["all-quarantine"])
+            const via = gate === "prompted" ? "permission-gate" : "conversation"
             const targetScope =
               input?.scope && input.scope !== "all" && input.scope !== "auto"
                 ? resolveScope(input.scope, dir)
@@ -971,7 +983,7 @@ export default Plugin.define({
                 if (l.status !== "quarantine") continue
                 if (input?.all === true || l.id === String(input?.id ?? "")) {
                   l.status = "approved"
-                  markDecision(l, "user", "permission-gate")
+                  markDecision(l, "user", via)
                   saveLesson(d, l)
                   n++
                 }
@@ -1002,7 +1014,8 @@ export default Plugin.define({
           execute: async (input: any, tctx: any) => {
             const dir = await dirFor(tctx?.sessionID)
             // v1.2 P0-0: retirement is a decision — always gated
-            await assertGate(ctx, tctx, "memory.forget", input?.stale === true ? ["stale-cleanup"] : [String(input?.id ?? "")])
+            const gate = await assertGate(ctx, tctx, "memory.forget", input?.stale === true ? ["stale-cleanup"] : [String(input?.id ?? "")])
+            const via = gate === "prompted" ? "permission-gate" : "conversation"
             if (input?.stale === true) {
               let n = 0
               for (const { dir: d } of bothDirs(dir)) {
@@ -1010,7 +1023,7 @@ export default Plugin.define({
                   if (!isStale(l)) continue
                   l.status = "superseded"
                   l.superseded_reason = String(input?.reason ?? "stale cleanup")
-                  markDecision(l, "user", "permission-gate")
+                  markDecision(l, "user", via)
                   saveLesson(d, l)
                   n++
                 }
@@ -1023,7 +1036,7 @@ export default Plugin.define({
                 if (l.id === String(input?.id ?? "")) {
                   l.status = "superseded"
                   l.superseded_reason = String(input?.reason ?? "retired via memory_forget")
-                  markDecision(l, "user", "permission-gate")
+                  markDecision(l, "user", via)
                   saveLesson(d, l)
                   appendRaw("repo", dir, `- [forget] ${l.id} superseded`)
                   return { content: `Lesson ${l.id} superseded (kept in the chain, no longer injected).` }

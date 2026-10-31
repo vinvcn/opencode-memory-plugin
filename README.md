@@ -61,16 +61,23 @@ hits/decay statistics retire what stops being useful.
 
 ## Permissions (v1.2)
 
-Decision-shaped operations route through OpenCode's permission system. To always confirm
-approve/retire interactively, add to `opencode.json`:
+Decision-shaped operations route through OpenCode's V2 permission system (`permissions` rule
+array — note the `permission` object form is V1 and ignored). To always confirm approve/retire
+interactively, add to `opencode.json`:
 
 ```jsonc
-{ "permission": { "memory_approve": "ask", "memory_forget": "ask" } }
+{
+  "permissions": [
+    { "action": "memory.approve", "resource": "*", "effect": "ask" },
+    { "action": "memory.forget", "resource": "*", "effect": "ask" },
+    { "action": "memory.hot-write", "resource": "*", "effect": "ask" },
+    { "action": "memory.supersede-approved", "resource": "*", "effect": "ask" }
+  ]
+}
 ```
 
-Without rules these operations take effect directly and are recorded as `decided_by: agent`
-in the ledger (visible via `memory_status`). Hot-layer writes (`target: "memory"`),
-superseding an approved lesson, and `force: true` also prompt when rules exist.
+Without such rules the base `*/* → allow` policy applies and these operations take effect
+directly, recorded as `decided_by: agent` in the ledger (visible via `memory_status`).
 
 ## Staleness handling (v1.2)
 

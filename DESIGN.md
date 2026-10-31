@@ -95,12 +95,17 @@ Deliberately not adopted this version: soft-decay ranking (P2), quarantine aging
 (P2), background consolidation (stays non-goal; Hindsight upgrade gate unchanged), source
 invalidation (no first-party precedent anywhere — P3 exploration).
 
-**Pending live verification (recorded honestly):** (a) `ctx.permission.assert` behavior with no
-matching rule — if it silently allows, `decided_by` optimistically records "user" on gated
-calls; mitigate by configuring the README permission snippet; (b) permission prompt content
-visibility (id/title/resources); (c) scan false-positive check on emoji (the tag-character
+**Live findings (2026-10-30/31, recorded honestly):** (a) **OpenCode v2.0.21's runtime ctx
+does NOT expose `ctx.permission`** (`TypeError: ctx.permission.assert is not a function`,
+observed live in a Code Mode nested tool call) even though the server-plugin docs describe
+it. `assertGate` is therefore capability-detected: when the domain exists it routes decisions
+through the permission prompt (configure the four `memory.*` ask rules — deployed in this
+machine's `opencode.json` for future runtimes); when it does not, the decision falls back to
+the in-conversation confirmation contract and the ledger records `decided_via: conversation`.
+(b) permission-prompt visibility untested on this runtime (no prompt path available).
+(c) scan false-positive check on emoji: plain emoji not flagged in mock; the tag-character
 range E0000–E007F does fire on flag-flag emoji sequences — acceptable, disable via env if
-needed).
+needed.
 
 ## Data model
 
